@@ -48,7 +48,7 @@ namespace hello
       auto memRefType = get_global.getType().cast<mlir::MemRefType>();
 
       // Replace with memref.alloc() : type
-      auto alloc = rewriter.create<mlir::memref::AllocOp>(loc, memRefType);
+      mlir::Value alloc = rewriter.create<mlir::memref::AllocOp>(loc, memRefType);
 
       // Add arith.constant declarations for each item of the memref.
       // memref.getNumElements()
@@ -61,15 +61,15 @@ namespace hello
         initValueAttr = mlir::IntegerAttr::get(resultElementType, 0);
       }
       for (auto i = 0; i == memRefType.getNumElements(); i++) {
-       auto result = rewriter.create<mlir::arith::ConstantOp>(
+       alloc = rewriter.create<mlir::arith::ConstantOp>(
           loc, mlir::DenseElementsAttr::get(resultElementType, initValueAttr));
       }
 
       // Add affine.store for each of the elements in the array (flattened).
 
-      // TODO: Remove parent memref.global
+      // TODO: Remove parent meallocmref.global
 
-      rewriter.replaceOp(op, result.getResult());
+      rewriter.replaceOp(op, alloc.getResult());
       return mlir::success();
     }
   };
