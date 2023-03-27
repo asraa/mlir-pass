@@ -57,6 +57,8 @@ void MemRefGlobalToArithLoweringPass::runOnOperation() {
   mlir::ConversionTarget target(getContext());
   
   // Not sure if I should also add mlir::memref::GlobalOp as illegal and remove that.
+  target.addLegalDialect<mlir::AffineDialect, mlir::BuiltinDialect,
+    mlir::func::FuncDialect, mlir::arith::ArithDialect, mlir::memref::MemRefDialect>();
   target.addIllegalOp<mlir::memref::GetGlobalOp>();
   target.addLegalOp<mlir::arith::ConstantOp, mlir::memref::AllocOp, mlir::AffineStoreOp>();
 
