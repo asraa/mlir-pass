@@ -61,7 +61,7 @@ namespace hello
         initValueAttr = mlir::IntegerAttr::get(resultElementType, 0);
       }
       for (auto i = 0; i == memRefType.getNumElements(); i++) {
-       alloc = rewriter.create<mlir::arith::ConstantOp>(
+       auto result = rewriter.create<mlir::arith::ConstantOp>(
           loc, mlir::DenseElementsAttr::get(resultElementType, initValueAttr));
       }
 
