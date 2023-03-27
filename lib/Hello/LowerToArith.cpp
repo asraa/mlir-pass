@@ -41,7 +41,8 @@ public:
     
     // location and type of the get_global operation
     auto loc = op->getLoc();
-    auto memRefType = op.getType().cast<mlir::MemRefType>();
+    auto get_global = mlir::cast<mlir::memref::GetGlobalOp>(op);
+    auto memRefType = get_global.getType().cast<mlir::MemRefType>();
 
     // replace with memref.alloc() : type
     auto alloc = rewriter.create<mlir::memref::AllocOp>(loc, type);
