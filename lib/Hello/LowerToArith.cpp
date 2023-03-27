@@ -55,7 +55,7 @@ public:
 }
 
 void MemRefGlobalToArithLoweringPass::runOnOperation() {
-  mlir::LLVMConversionTarget target(getContext());
+  mlir::ConversionTarget target(getContext());
   
   // Not sure if I should also add mlir::memref::GlobalOp as illegal and remove that.
   target.addIllegalOp<mlir::memref::GetGlobalOp>();
@@ -63,7 +63,7 @@ void MemRefGlobalToArithLoweringPass::runOnOperation() {
 
 
   mlir::RewritePatternSet patterns(&getContext());
-  patterns.add<MemRefGlobalOpLowering>(&getContext());
+  patterns.add<hello::MemRefGlobalOpLowering>(&getContext());
 
   if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns)))) {
     signalPassFailure();
