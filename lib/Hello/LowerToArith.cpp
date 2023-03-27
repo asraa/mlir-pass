@@ -45,13 +45,13 @@ public:
     auto memRefType = get_global.getType().cast<mlir::MemRefType>();
 
     // replace with memref.alloc() : type
-    auto alloc = rewriter.create<mlir::memref::AllocOp>(loc, type);
-    rewriter.replaceOp(op, alloc)
+    auto alloc = rewriter.create<mlir::memref::AllocOp>(loc, memRefType);
+    rewriter.replaceOp(op, alloc.getResult());
 
     // remove parent memref.global
 
     // Notify the rewriter that this operation has been removed.
-    rewriter.eraseOp(op);
+
     return mlir::success();
   }
 };
