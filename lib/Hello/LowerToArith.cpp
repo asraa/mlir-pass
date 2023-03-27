@@ -33,7 +33,21 @@ public:
   mlir::LogicalResult matchAndRewrite(mlir::Operation *op,
                                       mlir::ArrayRef<mlir::Value> operands,
                                       mlir::ConversionPatternRewriter &rewriter) const override {
-    // auto loc = op->getLoc();
+    // match on memref.get_global
+    // get argument @__constantblah
+    // get parent of argument (memref.global)
+    // get parent memref dimensions and value
+    // 
+    
+    // location and type of the get_global operation
+    auto loc = op->getLoc();
+    auto memRefType = op.getType().cast<mlir::MemRefType>();
+
+    // replace with memref.alloc() : type
+    auto alloc = rewriter.create<mlir::memref::AllocOp>(loc, type);
+    rewriter.replaceOp(op, alloc)
+
+    // remove parent memref.global
 
     // Notify the rewriter that this operation has been removed.
     rewriter.eraseOp(op);
