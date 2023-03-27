@@ -24,68 +24,89 @@
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
 
-namespace hello {
-class MemRefGlobalOpLowering : public mlir::ConversionPattern {
-public:
-  explicit MemRefGlobalOpLowering(mlir::MLIRContext *context)
-    : mlir::ConversionPattern(mlir::memref::GetGlobalOp::getOperationName(), 1, context) {}
+namespace hello
+{
+  class MemRefGlobalOpLowering : public mlir::ConversionPattern
+  {
+  public:
+    explicit MemRefGlobalOpLowering(mlir::MLIRContext *context)
+        : mlir::ConversionPattern(mlir::memref::GetGlobalOp::getOperationName(), 1, context) {}
 
-  mlir::LogicalResult matchAndRewrite(mlir::Operation *op,
-                                      mlir::ArrayRef<mlir::Value> operands,
-                                      mlir::ConversionPatternRewriter &rewriter) const override {
-    // match on memref.get_global
-    // get argument @__constantblah
-    // get parent of argument (memref.global)
-    // get parent memref dimensions and value
-    // 
-    
-    // location and type of the get_global operation
-    auto loc = op->getLoc();
-    auto get_global = mlir::cast<mlir::memref::GetGlobalOp>(op);
-    auto memRefType = get_global.getType().cast<mlir::MemRefType>();
+    mlir::LogicalResult matchAndRewrite(mlir::Operation *op,
+                                        mlir::ArrayRef<mlir::Value> operands,
+                                        mlir::ConversionPatternRewriter &rewriter) const override
+    {
+      // match on memref.get_global
+      // get argument @__constantblah
+      // get parent of argument (memref.global)
+      // get parent memref dimensions and value
+      //
 
-    // replace with memref.alloc() : type
-    auto alloc = rewriter.create<mlir::memref::AllocOp>(loc, memRefType);
-    rewriter.replaceOp(op, alloc.getResult());
+      // location and type of the get_global operation
+      auto loc = op->getLoc();
+      auto get_global = mlir::cast<mlir::memref::GetGlobalOp>(op);
+      auto memRefType = get_global.getType().cast<mlir::MemRefType>();
 
-    // remove parent memref.global
+      // Replace with memref.alloc() : type
+      auto alloc = rewriter.create<mlir::memref::AllocOp>(loc, memRefType);
 
-    // Notify the rewriter that this operation has been removed.
+      // Add arith.constant declarations for each item of the memref.
+      // memref.getNumElements()
+      auto resultElementType = memRefType.getElementType();
+      Attribute initValueAttr;
+      if (resultElementType.isa<FloatType>()) {
+        initValueAttr = FloatAttr::get(resultElementType, 0.0);
+      }
+      else {
+        initValueAttr = IntegerAttr::get(resultElementType, 0);
+      }
+      for (auto i = 0; i = get_global.getNumElements(); i++) {
+       alloc = rewriter.create<arith::ConstantOp>(
+          loc, DenseElementsAttr::get(vecType, initValueAttr));
+      }
 
-    return mlir::success();
+      // Add affine.store for each of the elements in the array (flattened).
+
+      // TODO: Remove parent memref.global
+
+      rewriter.replaceOp(op, alloc.getResult());
+      return mlir::success();
+    }
+  };
+
+  class MemRefGlobalToArithLoweringPass
+      : public mlir::PassWrapper<MemRefGlobalToArithLoweringPass, mlir::OperationPass<mlir::ModuleOp>>
+  {
+  public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(MemRefGlobalToArithLoweringPass)
+    void getDependentDialects(mlir::DialectRegistry &registry) const override
+    {
+      registry.insert<mlir::AffineDialect, mlir::memref::MemRefDialect, mlir::arith::ArithDialect>();
+    }
+
+    void runOnOperation() final;
+  };
+
+  void MemRefGlobalToArithLoweringPass::runOnOperation()
+  {
+    mlir::ConversionTarget target(getContext());
+
+    // Not sure if I should also add mlir::memref::GlobalOp as illegal and remove that.
+    target.addIllegalOp<mlir::memref::GetGlobalOp>();
+    target.addLegalOp<mlir::arith::ConstantOp, mlir::memref::AllocOp, mlir::AffineStoreOp>();
+
+    mlir::RewritePatternSet patterns(&getContext());
+    patterns.add<hello::MemRefGlobalOpLowering>(&getContext());
+
+    if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
+    {
+      signalPassFailure();
+    }
   }
-};
 
-
-class MemRefGlobalToArithLoweringPass
-        : public mlir::PassWrapper<MemRefGlobalToArithLoweringPass, mlir::OperationPass<mlir::ModuleOp>> {
-public:
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(MemRefGlobalToArithLoweringPass)
-  void getDependentDialects(mlir::DialectRegistry &registry) const override {
-    registry.insert<mlir::AffineDialect, mlir::memref::MemRefDialect, mlir::arith::ArithDialect>();
+  std::unique_ptr<mlir::Pass> createLowerToArithPass()
+  {
+    return std::make_unique<MemRefGlobalToArithLoweringPass>();
   }
-
-  void runOnOperation() final;
-};
-
-
-void MemRefGlobalToArithLoweringPass::runOnOperation() {
-  mlir::ConversionTarget target(getContext());
-  
-  // Not sure if I should also add mlir::memref::GlobalOp as illegal and remove that.
-  target.addIllegalOp<mlir::memref::GetGlobalOp>();
-  target.addLegalOp<mlir::arith::ConstantOp, mlir::memref::AllocOp, mlir::AffineStoreOp>();
-
-  mlir::RewritePatternSet patterns(&getContext());
-  patterns.add<hello::MemRefGlobalOpLowering>(&getContext());
-
-  if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns)))) {
-    signalPassFailure();
-  }
-}
-
-std::unique_ptr<mlir::Pass> createLowerToArithPass() {
-  return std::make_unique<MemRefGlobalToArithLoweringPass>();
-}
 
 }
