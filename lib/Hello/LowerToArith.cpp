@@ -39,6 +39,10 @@ public:
     return mlir::success();
   }
 };
+
+std::unique_ptr<mlir::Pass> createLowerToArithPass() {
+  return std::make_unique<MemRefGlobalToArithLoweringPass>();
+}
 }
 
 namespace {
@@ -71,6 +75,3 @@ void MemRefGlobalToArithLoweringPass::runOnOperation() {
 
 }
 
-std::unique_ptr<mlir::Pass> hello::createLowerToArithPass() {
-  return std::make_unique<MemRefGlobalToArithLoweringPass>();
-}
