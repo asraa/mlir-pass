@@ -40,10 +40,6 @@ public:
   }
 };
 
-std::unique_ptr<mlir::Pass> createLowerToArithPass() {
-  return std::make_unique<MemRefGlobalToArithLoweringPass>();
-}
-
 
 class MemRefGlobalToArithLoweringPass
         : public mlir::PassWrapper<MemRefGlobalToArithLoweringPass, mlir::OperationPass<mlir::ModuleOp>> {
@@ -71,6 +67,10 @@ void MemRefGlobalToArithLoweringPass::runOnOperation() {
   if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns)))) {
     signalPassFailure();
   }
+}
+
+std::unique_ptr<mlir::Pass> createLowerToArithPass() {
+  return std::make_unique<MemRefGlobalToArithLoweringPass>();
 }
 
 }
