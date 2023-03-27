@@ -143,6 +143,10 @@ int main(int argc, char **argv) {
   mlir::MLIRContext context;
   context.getOrLoadDialect<hello::HelloDialect>();
   context.getOrLoadDialect<mlir::func::FuncDialect>();
+  context.getOrLoadDialect<mlir::memref::MemRefDialect>();
+  context.getOrLoadDialect<mlir::arith::ArithDialect>();
+  context.getOrLoadDialect<mlir::AffineDialect>();
+
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
   if (int error = loadAndProcessMLIR(context, module)) {
