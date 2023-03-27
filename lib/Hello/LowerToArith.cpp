@@ -55,14 +55,14 @@ namespace hello
       auto resultElementType = memRefType.getElementType();
       mlir::Attribute initValueAttr;
       if (resultElementType.isa<mlir::FloatType>()) {
-        initValueAttr = FloatAttr::get(resultElementType, 0.0);
+        initValueAttr = mlir::FloatAttr::get(resultElementType, 0.0);
       }
       else {
-        initValueAttr = IntegerAttr::get(resultElementType, 0);
+        initValueAttr = mlir::IntegerAttr::get(resultElementType, 0);
       }
-      for (auto i = 0; i = memRefType.getNumElements(); i++) {
+      for (auto i = 0; i == memRefType.getNumElements(); i++) {
        alloc = rewriter.create<mlir::arith::ConstantOp>(
-          loc, DenseElementsAttr::get(resultElementType, initValueAttr));
+          loc, mlir::DenseElementsAttr::get(resultElementType, initValueAttr));
       }
 
       // Add affine.store for each of the elements in the array (flattened).
