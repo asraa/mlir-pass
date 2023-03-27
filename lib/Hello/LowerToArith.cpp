@@ -69,7 +69,7 @@ namespace hello
 
       // TODO: Remove parent memref.global
 
-      rewriter.replaceOp(op, alloc.getResult());
+      rewriter.replaceOp(op, result.getResult());
       return mlir::success();
     }
   };
