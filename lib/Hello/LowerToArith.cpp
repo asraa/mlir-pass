@@ -56,16 +56,15 @@ namespace hello
       mlir::Attribute initValueAttr;
       if (resultElementType.isa<mlir::FloatType>()) {
         initValueAttr = mlir::FloatAttr::get(resultElementType, 0.0);
-      }
-      else {
+      } else {
         initValueAttr = mlir::IntegerAttr::get(resultElementType, 0);
       }
-      for (auto i = 0; i == memRefType.getNumElements(); i++) {
+      for (auto i = 0; i < 3; i++) { // memRefType.getNumElements()
        result = rewriter.create<mlir::arith::ConstantOp>(
           loc, mlir::DenseElementsAttr::get(resultElementType, initValueAttr));
       }
 
-      // TODO: Remove parent meallocmref.global
+      // TODO: Remove parent memref.global
 
 
       // Add affine.store for each of the elements in the array (flattened).
