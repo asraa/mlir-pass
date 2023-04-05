@@ -14,8 +14,7 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
-
-
+#include <iostream>
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -24,6 +23,7 @@
 
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
+ #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Sequence.h"
 
 namespace hello
@@ -38,71 +38,76 @@ namespace hello
                                         mlir::ArrayRef<mlir::Value> operands,
                                         mlir::ConversionPatternRewriter &rewriter) const override
     {
-      // match on memref.get_global
-      // get argument @__constantblah
-      // get parent of argument (memref.global)
-      // get parent memref dimensions and value
-      //
-
       // TODO: Implicit location
       // ImplicitLocOpBuilder builder =
       // ImplicitLocOpBuilder::atBlockEnd(module->getLoc(), module->getBody());
 
       // location and type of the get_global operation
       auto loc = op->getLoc();
-      auto get_global = mlir::cast<mlir::memref::GetGlobalOp>(op);
-      auto memRefType = get_global.getType().cast<mlir::MemRefType>();
+      auto getGlobal = mlir::cast<mlir::memref::GetGlobalOp>(op);
+      auto memRefType = getGlobal.getType().cast<mlir::MemRefType>();
+      auto valueShape = memRefType.getShape();
+      auto resultElementType = memRefType.getElementType();
 
       // First create an allocation with memref.alloc() : type
       mlir::Value alloc = rewriter.create<mlir::memref::AllocOp>(loc, memRefType);
 
-      // Add arith.constant declarations for each item of the memref.
-      auto resultElementType = memRefType.getElementType();
-      mlir::Attribute initValueAttr;
-      if (resultElementType.isa<mlir::FloatType>()) {
-        initValueAttr = mlir::FloatAttr::get(resultElementType, 0.0);
-      } else {
-        initValueAttr = mlir::IntegerAttr::get(resultElementType, 0);
+      // Add arith.constant declarations for each index up to the largest dimension.
+      mlir::SmallVector<mlir::Value, 8> constantIndices;
+      if (!valueShape.empty())
+      {
+        for (auto i : llvm::seq<int64_t>(
+                 0, *std::max_element(valueShape.begin(), valueShape.end())))
+          constantIndices.push_back(rewriter.create<mlir::arith::ConstantIndexOp>(loc, i));
       }
-      auto attr = rewriter.getZeroAttr(resultElementType);
-      /*
-      for (auto i = 0; i < memRefType.getNumElements(); i++) { // memRefType.getNumElements()
-       auto cst = rewriter.create<mlir::arith::ConstantOp>(
-           loc, resultElementType, attr);
-       mlir::Value idx = rewriter.create<mlir::arith::ConstantOp>(
-         loc, rewriter.getIndexType(), rewriter.getIndexAttr(i)
-       );
-       auto load = rewriter.create<mlir::AffineStoreOp>(
-         loc, cst, alloc, idx);
+      else
+      {
+        constantIndices.push_back(rewriter.create<mlir::arith::ConstantIndexOp>(loc, 0));
       }
-      */
-
-      // TODO: Remove parent memref.global
+      
       auto module = op->getParentOfType<mlir::ModuleOp>();
       auto global = mlir::cast<mlir::memref::GlobalOp>(
-        module.lookupSymbol(get_global.getName()));
+          module.lookupSymbol(getGlobal.getName()));
 
-      // Scan through module to find the memref.global
-      global->dump();
-      if (global.getConstant() && global.getInitialValue()) {
-        auto const_vals = global.getInitialValue().value().cast<mlir::DenseElementsAttr>();
-        const_vals.dump();
 
-        auto  valueIt = const_vals.getValues<mlir::IntegerAttr>().begin();
-        
-        for (auto i = 0; i < const_vals.getNumElements(); i++) {
-          auto cst = rewriter.create<mlir::arith::ConstantOp>(
-              loc, resultElementType, *valueIt++);
-          mlir::Value idx = rewriter.create<mlir::arith::ConstantIndexOp>(
-              loc, i);
-          auto load = rewriter.create<mlir::AffineStoreOp>(
-              loc, cst, alloc, idx);
-        }
+      if (!global.getConstant() || !global.getInitialValue())
+      {
+        return mlir::failure();
       }
 
-      // Add affine.store for each of the elements in the array (flattened).
+      auto constVals = global.getInitialValue().value().cast<mlir::DenseElementsAttr>();
+      // The splats are unused, but technically I can optimize and replace splats
+      // with a constant of the splat value and result type.
 
+      auto values = constVals.tryGetValues<mlir::Attribute>();
+      auto valueIt = (*values).begin();
+      mlir::SmallVector<mlir::Value, 2> indices;
 
+      std::function<void(uint64_t)> storeElements = [&](uint64_t dimension)
+      {
+        // The last dimension is the base case of the recursion, at this point
+        // we store the element at the given index.
+        if (dimension == valueShape.size())
+        {
+          rewriter.create<mlir::AffineStoreOp>(
+              loc, rewriter.create<mlir::arith::ConstantOp>(
+                loc, resultElementType, *valueIt++), alloc,
+              indices);
+          return;
+        }
+
+        // Otherwise, iterate over the current dimension and add the indices to
+        // the list.
+        for (uint64_t i = 0, e = valueShape[dimension]; i != e; ++i)
+        {
+          indices.push_back(constantIndices[i]);
+          storeElements(dimension + 1);
+          indices.pop_back();
+        }
+      };
+
+      storeElements(0);
+      rewriter.eraseOp(global);
       rewriter.replaceOp(op, {alloc});
       return mlir::success();
     }
