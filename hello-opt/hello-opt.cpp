@@ -36,6 +36,24 @@
 #include "Hello/HelloPasses.h"
 
 namespace cl = llvm::cl;
+
+static cl::opt<bool> lower_global("lower-global",
+                                  cl::desc("Lower global memref"),
+                                  cl::init(false));
+
+static cl::opt<bool> lower_copy("lower-copy",
+                                  cl::desc("Lower memref.copy to affine load and store"),
+                                  cl::init(false));
+
+static cl::opt<bool> lower_select("lower-select",
+                                  cl::desc("Lower selects to scf.if and yields"),
+                                  cl::init(false));
+
+// TODO
+static cl::opt<bool> simplify_memrefs("simplify-memrefs",
+                                  cl::desc("Simplifies memref creation - lowers ExpandOp, SubviewOp, and Copy"),
+                                  cl::init(false));
+
 static cl::opt<std::string> inputFilename(cl::Positional,
                                           cl::desc("<input hello file>"),
                                           cl::init("-"),
@@ -52,10 +70,24 @@ int dumpLLVMIR(mlir::ModuleOp module) {
     return -1;
   }
 
+  // Create target machine and configure the LLVM Module
+  auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();
+  if (!tmBuilderOrError) {
+    llvm::errs() << "Could not create JITTargetMachineBuilder\n";
+    return -1;
+  }
+
+  auto tmOrError = tmBuilderOrError->createTargetMachine();
+  if (!tmOrError) {
+    llvm::errs() << "Could not create TargetMachine\n";
+    return -1;
+  }
+
+
   // Initialize LLVM targets.
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
-  mlir::ExecutionEngine::setupTargetTriple(llvmModule.get());
+  mlir::ExecutionEngine::setupTargetTripleAndDataLayout(llvmModule.get(), tmOrError.get().get());
 
   // Optionally run an optimization pipeline over the llvm module.
   auto optPipeline = mlir::makeOptimizingTransformer(0, 0, nullptr);
@@ -94,7 +126,22 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningOpRef<mlir::Modul
   mlir::PassManager passManager(&context);
   mlir::applyPassManagerCLOptions(passManager);
 
-  passManager.addPass(hello::createLowerToArithPass());
+  if (lower_global) {
+    passManager.addPass(hello::createLowerToArithPass());
+  }
+
+/*
+  if (replace_loads) {
+    passManager.addPass(hello:replaceLoadsPass());
+  }
+*/
+  if (lower_copy) {
+    passManager.addPass(hello::createLowerCopyToAffinePass());
+  }
+
+  if (lower_select) {
+    passManager.addPass(hello::createLowerSelectPass());
+  }
 
   if (mlir::failed(passManager.run(*module))) {
     return 4;
@@ -144,6 +191,7 @@ int main(int argc, char **argv) {
   context.getOrLoadDialect<mlir::memref::MemRefDialect>();
   context.getOrLoadDialect<mlir::arith::ArithDialect>();
   context.getOrLoadDialect<mlir::AffineDialect>();
+  context.getOrLoadDialect<mlir::scf::SCFDialect>();
 
 
   mlir::OwningOpRef<mlir::ModuleOp> module;

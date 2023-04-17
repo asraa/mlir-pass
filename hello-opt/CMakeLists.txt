@@ -12,6 +12,7 @@ set(LIBS
         MLIRLLVMCommonConversion
         MLIRLLVMToLLVMIRTranslation
         MLIRMemRefDialect
+        MLIRSCFDialect
         MLIRLLVMDialect
         MLIRParser
         MLIRPass
